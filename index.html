@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lista da Casa Nova</title>
+<style>
+  :root{
+    --bg:#1a1a1a;       /* fundo preto grafite */
+    --panel:#2b2b2b;    /* cinza crômio */
+    --muted:#aaaaaa;    /* texto secundário */
+    --text:#f5f5f5;     /* texto branco */
+    --primary:#cfa66b;  /* bambu/dourado */
+    --accent:#888888;   /* cinza neutro */
+    --ok:#4caf50;
+    --warn:#ff9800;
+    --danger:#f44336;
+    --shadow: 0 6px 18px rgba(0,0,0,.3);
+    --radius:14px;
+  }
+
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto;
+  }
+  header{position:sticky;top:0;background:var(--panel);padding:12px 16px;z-index:10;box-shadow:var(--shadow)}
+  h1{margin:0;font-size:1.2rem}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .input, select{padding:8px 10px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:var(--text)}
+  .btn{padding:8px 12px;border:none;border-radius:8px;cursor:pointer;background:var(--primary);color:#fff}
+  .btn.secondary{background:#444}
+  .btn.danger{background:var(--danger)}
+  .section{margin:20px auto;max-width:1000px}
+  .section h2{cursor:pointer;background:var(--panel);padding:12px 16px;margin:0;border-radius:8px}
+  .grid{display:grid;gap:12px;padding:12px}
+  @media(min-width:700px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--panel);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 6px;font-size:1rem}
+  .meta{font-size:.85rem;color:var(--muted);margin:4px 0}
+  .actions{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;padding:10px;max-width:1000px;margin:0 auto}
+  .kpi{flex:1;min-width:120px;background:var(--panel);padding:10px;border-radius:8px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏡 Lista da Casa Nova</h1>
+  <div class="toolbar">
+    <button class="btn" id="addBtn">➕ Adicionar item</button>
+    <button class="btn secondary" id="exportBtn">Exportar</button>
+    <label class="btn secondary">Importar<input id="importFile" type="file" hidden></label>
+    <button class="btn danger" id="resetBtn">Zerar</button>
+  </div>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<main id="sections"></main>
+
+<dialog id="itemDlg">
+  <form method="dialog" style="display:grid;gap:10px;min-width:260px">
+    <h3 id="dlgTitle">Novo item</h3>
+    <input id="f_name" class="input" placeholder="Nome do item" required>
+    <select id="f_room" class="input">
+      <option>Sala</option><option>Quarto</option><option>Cozinha</option><option>Lavanderia</option>
+    </select>
+    <input id="f_price" class="input" placeholder="Valor (R$)">
+    <input id="f_imgurl" class="input" placeholder="Foto (URL)">
+    <textarea id="f_notes" class="input" rows="3" placeholder="Observações"></textarea>
+    <menu style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn secondary" value="cancel">Cancelar</button>
+      <button class="btn" id="saveItemBtn" value="default">Salvar</button>
+    </menu>
+  </form>
+</dialog>
+
+<script>
+const KEY="casa_lista_v2";
+const $=sel=>document.querySelector(sel);
+let items=JSON.parse(localStorage.getItem(KEY)||"[]");
+
+if(items.length===0){
+  // lista inicial
+  items=[
+    {id:crypto.randomUUID(),name:"Sofá 3 lugares",room:"Sala",price:2500,bought:false},
+    {id:crypto.randomUUID(),name:"Mesa de jantar",room:"Sala",price:1200,bought:false},
+    {id:crypto.randomUUID(),name:"TV",room:"Sala",price:1800,bought:false},
+    {id:crypto.randomUUID(),name:"Cama casal/queen",room:"Quarto",price:2000,bought:false},
+    {id:crypto.randomUUID(),name:"Guarda-roupa",room:"Quarto",price:1500,bought:false},
+    {id:crypto.randomUUID(),name:"Colchão",room:"Quarto",price:1200,bought:false},
+    {id:crypto.randomUUID(),name:"Geladeira",room:"Cozinha",price:3500,bought:false},
+    {id:crypto.randomUUID(),name:"Fogão 4 bocas",room:"Cozinha",price:1500,bought:false},
+    {id:crypto.randomUUID(),name:"Micro-ondas",room:"Cozinha",price:600,bought:false},
+    {id:crypto.randomUUID(),name:"Máquina de lavar",room:"Lavanderia",price:2200,bought:false},
+    {id:crypto.randomUUID(),name:"Varal",room:"Lavanderia",price:200,bought:false},
+  ];
+  save();
+}
+
+function save(){localStorage.setItem(KEY,JSON.stringify(items));}
+function br(v){return v? v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"}):"";}
+
+function render(){
+  const rooms=["Sala","Quarto","Cozinha","Lavanderia"];
+  $("#sections").innerHTML="";
+  for(const r of rooms){
+    const sec=document.createElement("section");
+    sec.className="section";
+    sec.innerHTML=`<h2 onclick="this.nextElementSibling.toggleAttribute('hidden')">📍 ${r}</h2><div class="grid"></div>`;
+    const grid=sec.querySelector(".grid");
+    const its=items.filter(i=>i.room===r);
+    for(const it of its){
+      const card=document.createElement("div");
+      card.className="card";
+      card.innerHTML=`
+        <h3>${it.name}</h3>
+        <div class="meta">${it.price?br(it.price):""}</div>
+        <label><input type="checkbox" ${it.bought?"checked":""} data-id="${it.id}"> Comprado</label>
+        <div class="actions">
+          <button class="btn secondary" data-act="edit" data-id="${it.id}">Editar</button>
+          <button class="btn danger" data-act="del" data-id="${it.id}">Excluir</button>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+    $("#sections").appendChild(sec);
+  }
+  updateKpis();
+  bind();
+}
+
+function updateKpis(){
+  const total=items.length;
+  const comprados=items.filter(i=>i.bought).length;
+  const soma=items.reduce((a,b)=>a+(b.price||0),0);
+  const pagos=items.filter(i=>i.bought).reduce((a,b)=>a+(b.price||0),0);
+  $("#kpis").innerHTML=`
+    <div class="kpi"><div>Total itens</div><b>${total}</b></div>
+    <div class="kpi"><div>Comprados</div><b>${comprados}</b></div>
+    <div class="kpi"><div>Faltam</div><b>${total-comprados}</b></div>
+    <div class="kpi"><div>Orçamento</div><b>${br(soma)}</b></div>
+    <div class="kpi"><div>Falta gastar</div><b>${br(soma-pagos)}</b></div>
+  `;
+}
+
+function bind(){
+  document.querySelectorAll("[data-id]").forEach(el=>{
+    el.onchange=e=>{
+      const id=e.target.getAttribute("data-id");
+      const it=items.find(i=>i.id===id);
+      it.bought=e.target.checked;save();render();
+    }
+  });
+  document.querySelectorAll("[data-act]").forEach(btn=>{
+    btn.onclick=e=>{
+      const id=btn.getAttribute("data-id");
+      if(btn.dataset.act==="edit"){openModal(items.find(i=>i.id===id));}
+      if(btn.dataset.act==="del"){items=items.filter(i=>i.id!==id);save();render();}
+    }
+  });
+}
+
+function openModal(item=null){
+  $("#dlgTitle").textContent=item?"Editar item":"Novo item";
+  $("#f_name").value=item?.name||"";
+  $("#f_room").value=item?.room||"Sala";
+  $("#f_price").value=item?.price||"";
+  $("#f_imgurl").value=item?.img||"";
+  $("#f_notes").value=item?.notes||"";
+  $("#itemDlg").showModal();
+  $("#saveItemBtn").onclick=(e)=>{
+    e.preventDefault();
+    if(item){
+      item.name=$("#f_name").value;
+      item.room=$("#f_room").value;
+      item.price=Number($("#f_price").value.replace(",","."));
+      item.img=$("#f_imgurl").value;
+      item.notes=$("#f_notes").value;
+    }else{
+      items.push({id:crypto.randomUUID(),name:$("#f_name").value,room:$("#f_room").value,
+        price:Number($("#f_price").value.replace(",",".")||0),img:$("#f_imgurl").value,notes:$("#f_notes").value,bought:false});
+    }
+    save();$("#itemDlg").close();render();
+  };
+}
+
+$("#addBtn").onclick=()=>openModal();
+$("#resetBtn").onclick=()=>{if(confirm("Apagar todos os itens?")){items=[];save();render();}};
+$("#exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify(items)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="casa.json";a.click();
+};
+$("#importFile").onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const fr=new FileReader(); fr.onload=()=>{
+    items=JSON.parse(fr.result); save(); render();
+  }; fr.readAsText(f);
+};
+
+render();
+</script>
+</body>
+</html>
+
+add index.html
